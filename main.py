@@ -7,6 +7,9 @@ from flask_cors import CORS
 from werkzeug.utils import secure_filename
 from PIL import Image, ImageSequence
 from dotenv import load_dotenv
+import io
+
+from zoom import image2recrusive
 
 img_dir = os.getenv('IMG_DIR')
 temp_dir = os.getenv('TEMP_DIR')
@@ -147,6 +150,34 @@ def uploadGrid():
         print (e)
         return jsonify({'error': str(e)}), 500
 
+@app.route('/recrusivegif', methods=['POST'])
+def recrusiveGif():
+    try:
+        if 'file' not in request.files:
+            return "No file part", 400
+        file = request.files['file']
+        if file.filename == '':
+            return "No selected file", 400
 
+        # Process the image (example: convert to grayscale)
+        img = Image.open(file.stream)
+        result_img = image2recrusive(img)
+
+        # Save processed image to a byte stream
+        img_byte_arr = io.BytesIO()
+        result_img[0].save(
+            img_byte_arr,
+            format='GIF',
+            save_all=True,
+            append_images=result_img[1:],
+            loop=0,
+            duration=100  # Adjust duration per frame if needed
+        )
+        img_byte_arr.seek(0)
+
+        return send_file(img_byte_arr, mimetype='image/png')
+    except Exception as e:
+        print (e)
+        return jsonify({'error', str(e)}), 500
 if __name__ == '__main__':
     app.run(debug=True, port=5001)
