@@ -19,10 +19,16 @@ def image2recrusive(image, REC_COUNT = 3, STEPS = 50, DURATION = 20, MODE = "lin
     cropstart = array([0, 0, image.size[0], image.size[1]])
     frames = []
 
+    center_x = image.size[0] // 2
+    center_y = image.size[1] // 2
+
     for i in range(STEPS):
         mode = {"linear": [STEPS-i, i], "quad": [(STEPS-i)**2, i**2], "sqrt":[sqrt(STEPS-i), sqrt(i)]}
         # calculate new crop
-        new_dim = average([cropstart] + [cropend], weights=mode[MODE], axis = 0)
+        width = image.size[0] * (0.1 ** (0.02 * i))
+        height = image.size[1] * (0.1 ** (0.02 * i))
+        new_dim = array([int(center_x - width / 2), int(center_y - height / 2), int(center_x + width / 2), int(center_y + height / 2)])
+        # new_dim = average([cropstart] + [cropend], weights=mode[MODE], axis = 0)
         # append cropped, rescaled frame to gif
         frames.append(image.crop(new_dim).resize((GIF_WIDTH, GIF_HEIGHT)))
     return frames
