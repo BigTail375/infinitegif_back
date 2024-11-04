@@ -1,6 +1,6 @@
 /venv
 
-*.txt
+run.txt
 .env
 
 __pycache__
