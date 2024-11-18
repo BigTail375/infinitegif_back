@@ -3,19 +3,31 @@ import time
 import shutil
 
 from flask import Flask, request, jsonify, send_file
-from flask_cors import CORS
 from werkzeug.utils import secure_filename
+from pymongo import MongoClient, DESCENDING
+from flask_cors import CORS
+import uuid
+from pydantic import BaseModel
+from typing import List
 from PIL import Image, ImageSequence
 from dotenv import load_dotenv
 import io
 
 from zoom import image2recrusive
+from path import IMG_DIR, TEMP_DIR
 
-img_dir = os.getenv('IMG_DIR')
-temp_dir = os.getenv('TEMP_DIR')
+# MongoDB connection
+client = MongoClient("mongodb://localhost:27017")
+db = client["image_database"]
+collection = db["images"]
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
+
+# Pydantic model for response validation
+class ImageResponse(BaseModel):
+    url: str
+    tags: List[str]
 
 @app.route('/page', methods=['POST'])
 def get_page():
@@ -24,7 +36,7 @@ def get_page():
 
         # Get JSON data from the request
         data = request.get_json()
-
+ 
         # Extract 'number' from the request data
         page_index = data.get('page')
 
@@ -34,17 +46,18 @@ def get_page():
         if not isinstance(page_index, int):
             return jsonify({'error': 'The number must be an integer'}), 400
         
-        img_count = len(os.listdir(img_dir)) - 1
+        img_count = len(os.listdir(IMG_DIR)) - 1
         data = []
         end_index = img_count - img_per_page * (page_index - 1)
         start_index = end_index - img_per_page
         if start_index < 0:
             start_index = 0
         for i in range(img_count - 1, start_index - 1, -1):
-            if os.path.exists(os.path.join(img_dir, f'{i}.gif')):
+            if os.path.exists(os.path.join(IMG_DIR, f'{i}.gif')):
                 data.append({'path': f'{i}.gif'})
             else:
                 data.append({'path': f'{i}.png'})
+        
         # Return the number as part of the response
         return jsonify({'results': data}), 200
 
@@ -63,8 +76,8 @@ def upload_file():
         return {'error': 'No selected file'}, 400
 
     if file:
-        img_count = len(os.listdir(img_dir)) - 1
-        file_path = os.path.join(img_dir, f'{img_count}.gif')
+        img_count = len(os.listdir(IMG_DIR)) - 1
+        file_path = os.path.join(IMG_DIR, f'{img_count}.gif')
         file.save(file_path)
 
         gif = Image.open(file_path)
@@ -105,7 +118,7 @@ def gif_grid():
         except ValueError:
             return {'error': 'Invalid grid size format'}, 400
         
-        file_path = os.path.join(temp_dir, f'{time.time()}.gif')
+        file_path = os.path.join(TEMP_DIR, f'{time.time()}.gif')
         file.save(file_path)
 
         gif = Image.open(file_path)
@@ -130,7 +143,7 @@ def gif_grid():
 
         # Save the grid image
         grid_img_name = f'{time.time()}.png'
-        grid_img_path = os.path.join(temp_dir, grid_img_name)
+        grid_img_path = os.path.join(TEMP_DIR, grid_img_name)
         grid_image.save(grid_img_path)
         return jsonify({'results': grid_img_name}), 200
 
@@ -141,8 +154,8 @@ def uploadGrid():
     try:
         file_path = request.form['file']
         
-        img_count = len(os.listdir(img_dir)) - 1
-        shutil.copy(os.path.join(temp_dir, file_path), os.path.join(img_dir, f'{img_count}.png'))
+        img_count = len(os.listdir(IMG_DIR)) - 1
+        shutil.copy(os.path.join(TEMP_DIR, file_path), os.path.join(IMG_DIR, f'{img_count}.png'))
         
         return jsonify({'success': 'image is uploaded!'}), 200
 
@@ -179,5 +192,7 @@ def recrusiveGif():
     except Exception as e:
         print (e)
         return jsonify({'error', str(e)}), 500
+
+
 if __name__ == '__main__':
     app.run()

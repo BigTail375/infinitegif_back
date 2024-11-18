@@ -4,3 +4,4 @@ run.txt
 .env
 
 __pycache__
+path.py
