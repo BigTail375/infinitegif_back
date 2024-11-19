@@ -83,6 +83,33 @@ def get_page():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route("/image_by_tags", methods=["POST"])
+def get_images_by_tags():
+    # try:
+    image_per_page = 10
+
+    data = request.json
+    page = data.get("page")
+    tags = data.get("tags", [])
+    
+    filter_query = {"tags": {"$in": tags}}
+
+    img_count = image_per_page * (int(page) + 1)
+    tag_collection_count = collection.count_documents(filter_query)
+    print (tag_collection_count)
+    if img_count > tag_collection_count:
+        img_count = tag_collection_count
+
+    cursor = collection.find(filter_query).sort('upload_time', DESCENDING).limit(img_count)
+    images = list(cursor)
+
+    if not images:
+        return jsonify({"error": "No images found"}), 404
+    response = [{"path": image["folder_path"], "_id": str(image["_id"])} for image in images]
+    return jsonify({'results': response}), 200
+    # except Exception as e:
+    #     return jsonify({'error': str(e)}), 500
+
 @app.route('/id', methods=['POST'])
 def get_id():
     try:
@@ -99,32 +126,6 @@ def get_id():
     
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-
-@app.route("/image_by_tags", methods=["POST"])
-def get_images_by_tags():
-    # try:
-    image_per_page = 10
-
-    page = request.form["page"]
-    tags = request.form.getlist("tags")
-    tags = json.loads(tags[0])
-    filter_query = {"tags": {"$in": tags}}
-
-    img_count = image_per_page * (int(page) + 1)
-    tag_collection_count = collection.count_documents(filter_query)
-    print (tag_collection_count)
-    if img_count > tag_collection_count:
-        img_count = tag_collection_count
-
-    cursor = collection.find(filter_query).sort('upload_time', DESCENDING).limit(img_count)
-    images = list(cursor)
-
-    if not images:
-        return jsonify({"error": "No images found"}), 404
-    response = [{"path": image["folder_path"]} for image in images]
-    return jsonify({'results': response}), 200
-    # except Exception as e:
-    #     return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     # app.run()
