@@ -40,14 +40,19 @@ def upload_image():
         return {'error': 'No file part'}, 400
     
     file = request.files['file']
-    tags = request.form.getlist("tags")
-    tags = json.loads(tags[0])
+    tags = request.form.get('tags', '[]')
 
     if file.filename == '':
         return {'error': 'No selected file'}, 400
+    try:
+        tags = json.loads(tags)  # Parse the tags
+    except json.JSONDecodeError:
+        return {'error': 'Invalid tags format'}, 400
     
     print (tags, type(tags))
-
+    if len(tags) > 0 and tags[0] == "":
+        tags = []
+    
     filename = f"{uuid.uuid4()}.{file.filename.split('.')[-1]}"
     file_path = os.path.join(IMG_DIR, secure_filename(filename))
     file.save(file_path)
@@ -56,6 +61,7 @@ def upload_image():
         "folder_path": filename,
         "tags": tags,
         "audio_path": "",
+        "vote_count": 0,
         "upload_time": datetime.now().timestamp() # Unique value for sorting by upload time
     }
     collection_image.insert_one(document)
@@ -143,9 +149,33 @@ def get_id():
 
         if not image:
             return jsonify({"error": "No images found"}), 404
-        response = {'path': image['folder_path'], 'tags': image['tags'], "audio": image["audio_path"]}
+        response = {'path': image['folder_path'], 'tags': image['tags'], "audio": image["audio_path"], "vote": image["vote_count"]}
         
         return jsonify({'results': response}), 200
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/update_vote', methods=['POST'])
+def update_vote():
+    try:
+        data = request.get_json()
+        _id = data.get('id')
+        vote = data.get('vote')
+        object_id = ObjectId(str(_id))
+        image = collection_image.find_one({"_id": object_id})
+
+        if vote == "up":
+            collection_image.update_one(
+                {"_id": object_id},
+                {"$inc": {"vote_count": 1}}
+            )
+        else:
+            collection_image.update_one(
+                {"_id": object_id},
+                {"$inc": {"vote_count": -1}}
+            )
+        return jsonify({'results': "vote is updated!"}), 200
     
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -192,7 +222,7 @@ def gif_grid():
             grid_image.paste(frame, (col * gif_width, row * gif_height))
 
         # Save the grid image
-        grid_img_name = f"{uuid.uuid4()}.{file.filename.split('.')[-1]}"
+        grid_img_name = f"{uuid.uuid4()}.png"
         grid_img_path = os.path.join(TEMP_DIR, grid_img_name)
         grid_image.save(grid_img_path)
         return jsonify({'results': grid_img_name}), 200
@@ -210,6 +240,7 @@ def uploadGrid():
             "folder_path": file_path,
             "tags": tags,
             "audio_path": "",
+            "vote_count": 0,
             "upload_time": datetime.now().timestamp() # Unique value for sorting by upload time
         }
         collection_image.insert_one(document)
@@ -249,7 +280,49 @@ def recrusiveGif():
     except Exception as e:
         print (e)
         return jsonify({'error', str(e)}), 500
+
+@app.route('/url2grid', methods=['POST'])
+def gif_grid():
+    _id = request.form['_id']
+    grid_size = request.form['gridSize']
     
+    try:
+        rows, cols = map(int, grid_size.split('x'))  # Extract rows and columns from grid size
+    except ValueError:
+        return {'error': 'Invalid grid size format'}, 400
+    
+    
+    object_id = ObjectId(str(_id))
+    image = collection_image.find_one({"_id": object_id})
+
+    file_path = os.path.join(IMG_DIR, image['folder_path'])
+
+    gif = Image.open(file_path)
+
+    # Calculate frame step to sample evenly from the GIF
+    frame_count = gif.n_frames
+    total_images = rows * cols
+
+    # Create a new blank image for the grid
+    gif_width, gif_height = gif.size
+    grid_image = Image.new('RGBA', (cols * gif_width, rows * gif_height))
+    
+    frames = []
+    for i in range(total_images):
+        gif.seek(int(frame_count * i / total_images))
+        frames.append(gif.copy())
+
+    for i, frame in enumerate(frames):
+        row = i // cols
+        col = i % cols
+        grid_image.paste(frame, (col * gif_width, row * gif_height))
+
+    # Save the grid image
+    grid_img_name = f"{uuid.uuid4()}.png"
+    grid_img_path = os.path.join(TEMP_DIR, grid_img_name)
+    grid_image.save(grid_img_path)
+    return jsonify({'results': grid_img_name}), 200
+ 
 if __name__ == '__main__':
     # app.run()
     app.run(port=5001)
