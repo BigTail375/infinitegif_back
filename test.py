@@ -52,8 +52,10 @@ def upload_image():
     print (tags, type(tags))
     if len(tags) > 0 and tags[0] == "":
         tags = []
-    
-    filename = f"{uuid.uuid4()}.{file.filename.split('.')[-1]}"
+    file_ext = file.filename.split('.')[-1]
+    if file_ext == 'extension':
+        file_ext = 'gif'
+    filename = f"{uuid.uuid4()}.{file_ext}"
     file_path = os.path.join(IMG_DIR, secure_filename(filename))
     file.save(file_path)
 
@@ -323,6 +325,35 @@ def gif_grid_url():
     grid_image.save(grid_img_path)
     return jsonify({'results': grid_img_name}), 200
  
+@app.route('/url2recrusive', methods=['POST'])
+def url2recrusive():
+    try:
+        _id = request.form['_id']
+        object_id = ObjectId(str(_id))
+
+        image = collection_image.find_one({"_id": object_id})
+        file_path = os.path.join(IMG_DIR, image['folder_path'])
+
+        img = Image.open(file_path)
+        result_img = image2recrusive(img)
+
+        # Save processed image to a byte stream
+        img_byte_arr = io.BytesIO()
+        result_img[0].save(
+            img_byte_arr,
+            format='GIF',
+            save_all=True,
+            append_images=result_img[1:],
+            loop=0,
+            duration=100  # Adjust duration per frame if needed
+        )
+        img_byte_arr.seek(0)
+
+        return send_file(img_byte_arr, mimetype='image/png')
+    except Exception as e:
+        print (e)
+        return jsonify({'error', str(e)}), 500
+
 if __name__ == '__main__':
     # app.run()
     app.run(port=5001)
