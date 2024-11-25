@@ -324,5 +324,5 @@ def gif_grid_url():
     return jsonify({'results': grid_img_name}), 200
  
 if __name__ == '__main__':
-    app.run()
-    # app.run(port=5002)
+    # app.run()
+    app.run(port=5002)
