@@ -282,7 +282,7 @@ def recrusiveGif():
         return jsonify({'error', str(e)}), 500
 
 @app.route('/url2grid', methods=['POST'])
-def gif_grid():
+def gif_grid_url():
     _id = request.form['_id']
     grid_size = request.form['gridSize']
     
