@@ -1,6 +1,7 @@
 import os
 import time
 import shutil
+import cv2
 
 from flask import Flask, request, jsonify, send_file
 from werkzeug.utils import secure_filename
@@ -18,7 +19,7 @@ from bson import ObjectId
 
 from path import IMG_DIR, TEMP_DIR
 from zoom import image2recrusive
-
+from paintbynumber import paint_by_number
 
 # MongoDB connection
 client = MongoClient("mongodb://localhost:27017")
@@ -283,6 +284,27 @@ def recrusiveGif():
         print (e)
         return jsonify({'error', str(e)}), 500
 
+@app.route('/paintbynumber', methods=['POST'])
+def paintbynumber():
+    try:
+        if 'file' not in request.files:
+            return "No file part", 400
+        file = request.files['file']
+        if file.filename == '':
+            return "No selected file", 400
+
+        file_path = os.path.join(TEMP_DIR, f'{time.time()}.jpg')
+        file.save(file_path)
+        painted_img = paint_by_number(file_path)
+        _, buffer = cv2.imencode('.jpg', painted_img)
+        img_byte_arr = io.BytesIO(buffer.tobytes())
+        img_byte_arr.seek(0)
+
+        return send_file(img_byte_arr, mimetype='image/png')
+    except Exception as e:
+        print (e)
+        return jsonify({'error', str(e)}), 500
+
 @app.route('/url2grid', methods=['POST'])
 def gif_grid_url():
     _id = request.form['_id']
@@ -354,6 +376,25 @@ def url2recrusive():
         print (e)
         return jsonify({'error', str(e)}), 500
 
+@app.route('/url2paint', methods=['POST'])
+def url2paint():
+    try:
+        _id = request.form['_id']
+        object_id = ObjectId(str(_id))
+
+        image = collection_image.find_one({"_id": object_id})
+        file_path = os.path.join(IMG_DIR, image['folder_path'])
+
+        painted_img = paint_by_number(file_path)
+        _, buffer = cv2.imencode('.jpg', painted_img)
+        img_byte_arr = io.BytesIO(buffer.tobytes())
+        img_byte_arr.seek(0)
+
+        return send_file(img_byte_arr, mimetype='image/png')
+    except Exception as e:
+        print (e)
+        return jsonify({'error', str(e)}), 500
+    
 if __name__ == '__main__':
     # app.run()
     app.run(port=5001)
