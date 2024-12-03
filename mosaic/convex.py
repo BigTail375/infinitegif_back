@@ -58,7 +58,7 @@ def simple_concave_zu_convex(p, half_tile, A0, richtung=-1):
         counter += 1
         p = concave_list.pop()
         p_points = MultiPoint(p.exterior.coords)
-        concave_points = [i for i,point in enumerate(p_points) if p.convex_hull.contains(point)]
+        concave_points = [i for i,point in enumerate(p_points.geoms) if p.convex_hull.contains(point)]
         # does not find points when polygon has hole (i.e. has interiors)
         if len(concave_points) == 0:
             print ('Could not convert tile to convex. Should not happen :-(')
