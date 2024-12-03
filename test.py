@@ -20,6 +20,8 @@ from bson import ObjectId
 from path import IMG_DIR, TEMP_DIR
 from zoom import image2recrusive
 from paintbynumber import paint_by_number
+from puzzle import create_puzzle_effect
+from mosaic import apply_mosaic_effect
 
 # MongoDB connection
 client = MongoClient("mongodb://localhost:27017")
