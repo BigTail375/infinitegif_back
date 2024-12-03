@@ -80,7 +80,7 @@ def simple_concave_zu_convex(p, half_tile, A0, richtung=-1):
         if counter>5:
             success = False
             break
-        for ppi in pp:
+        for ppi in pp.geoms:
             if ppi.is_valid == False or ppi.area<0.05*A0:
                 continue
             if not is_convex(ppi):
