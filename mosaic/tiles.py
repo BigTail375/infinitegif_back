@@ -201,7 +201,7 @@ def repair_tiles(polygons):
     polygons_new = []
     for p in polygons:
         if p.type == 'MultiPolygon':
-            for pp in p:
+            for pp in p.geoms:
                 polygons_new += [pp]
         else:
             polygons_new += [p]
