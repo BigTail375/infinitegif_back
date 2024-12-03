@@ -7,20 +7,33 @@ from shapely.geometry import LineString, Polygon, MultiPoint
 from shapely import affinity
 from mosaic import plotting
 
-
 def fit_in_polygon(p, nearby_polygons):
     # Remove parts from polygon which overlap with existing ones:
     for p_there in nearby_polygons: 
         p = p.difference(p_there)
     # only keep largest part if polygon consists of multiple fragments:
-    if p.geom_type=='MultiPolygon':
-        i_largest = np.argmax([p_i.area for p_i in p])
-        p = p[i_largest]
+    if p.geom_type == 'MultiPolygon':
+        i_largest = np.argmax([p_i.area for p_i in p.geoms])  # Use p.geoms to iterate over MultiPolygon
+        p = p.geoms[i_largest]
     # remove pathologic polygons with holes (rare event):
-    if p.type not in ['MultiLineString','LineString', 'GeometryCollection']:
-        if p.interiors: # check for attribute interiors if accessible
+    if p.type not in ['MultiLineString', 'LineString', 'GeometryCollection']:
+        if p.interiors:  # check for attribute interiors if accessible
             p = Polygon(list(p.exterior.coords))
     return p
+
+# def fit_in_polygon(p, nearby_polygons):
+#     # Remove parts from polygon which overlap with existing ones:
+#     for p_there in nearby_polygons: 
+#         p = p.difference(p_there)
+#     # only keep largest part if polygon consists of multiple fragments:
+#     if p.geom_type=='MultiPolygon':
+#         i_largest = np.argmax([p_i.area for p_i in p])
+#         p = p[i_largest]
+#     # remove pathologic polygons with holes (rare event):
+#     if p.type not in ['MultiLineString','LineString', 'GeometryCollection']:
+#         if p.interiors: # check for attribute interiors if accessible
+#             p = Polygon(list(p.exterior.coords))
+#     return p
 
 
 def place_tiles_along_chains(chains, angles_0to180, half_tile, RAND_SIZE, MAX_ANGLE, A0, plot=[]):
