@@ -20,9 +20,9 @@ from bson import ObjectId
 from path import IMG_DIR, TEMP_DIR
 from zoom import image2recrusive
 from paintbynumber import paint_by_number
-from puzzle import create_puzzle_effect
-from mosaic import apply_mosaic_effect
+from puzzle import overlay_images
 from function import convert_image_to_bytesio
+from mosaic.mosaic import create_roman_mosaic
 
 # MongoDB connection
 client = MongoClient("mongodb://localhost:27017")
@@ -323,8 +323,8 @@ def puzzle():
         file_path = os.path.join(TEMP_DIR, f'{time.time()}.jpg')
         saved_file_path = os.path.join(TEMP_DIR, f'{time.time()}.gif')
         file.save(file_path)
-        img_byte_arr = create_puzzle_effect(file_path, saved_file_path, piece_size)
-
+        overlay_images(file_path, 'overlay.png', saved_file_path)
+        img_byte_arr = convert_image_to_bytesio(saved_file_path)
         return send_file(img_byte_arr, mimetype='image/png')
     except Exception as e:
         print (e)
@@ -343,7 +343,7 @@ def mosaic():
         file_path = os.path.join(TEMP_DIR, f'{time.time()}.jpg')
         saved_file_path = os.path.join(TEMP_DIR, f'{time.time()}.gif')
         file.save(file_path)
-        apply_mosaic_effect(file_path, saved_file_path, tile_size)
+        create_roman_mosaic(file_path, saved_file_path)
         img_byte_arr = convert_image_to_bytesio(saved_file_path)
 
         return send_file(img_byte_arr, mimetype='image/png')
@@ -453,7 +453,8 @@ def url2puzzle():
         image = collection_image.find_one({"_id": object_id})
         file_path = os.path.join(IMG_DIR, image['folder_path'])
         saved_file_path = os.path.join(TEMP_DIR, f'{time.time()}.gif')
-        img_byte_arr = create_puzzle_effect(file_path, saved_file_path, piece_size)
+        overlay_images(file_path, 'overlay.png', saved_file_path)
+        img_byte_arr = convert_image_to_bytesio(saved_file_path)
 
         return send_file(img_byte_arr, mimetype='image/png')
     except Exception as e:
@@ -470,7 +471,7 @@ def url2mosaic():
         image = collection_image.find_one({"_id": object_id})
         file_path = os.path.join(IMG_DIR, image['folder_path'])
         saved_file_path = os.path.join(TEMP_DIR, f'{time.time()}.gif')
-        apply_mosaic_effect(file_path, saved_file_path, tile_size)
+        create_roman_mosaic(file_path, saved_file_path)
         img_byte_arr = convert_image_to_bytesio(saved_file_path)
 
         return send_file(img_byte_arr, mimetype='image/png')

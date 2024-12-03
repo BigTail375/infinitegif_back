@@ -1,63 +1,47 @@
-import numpy as np
 from PIL import Image
-import imageio
-import random
-import io
 
-def create_puzzle_effect(image_path, output_gif, num_pieces=4, duration=0.1):
-    try:
-        # Load the image
-        image = Image.open(image_path)
-        width, height = image.size
+def overlay_images(jpg_path, png_path, output_path):
+    # Load images
+    jpg_image = Image.open(jpg_path)
+    png_image = Image.open(png_path)
 
-        # Calculate piece size
-        piece_width = width // num_pieces
-        piece_height = height // num_pieces
+    # Get dimensions
+    jpg_width, jpg_height = jpg_image.size
+    png_width, png_height = png_image.size
 
-        # Create a list to hold the pieces
-        pieces = []
+    # Determine aspect ratios
+    jpg_aspect = jpg_width / jpg_height
+    png_aspect = png_width / png_height
 
-        # Cut the image into pieces
-        for i in range(num_pieces):
-            for j in range(num_pieces):
-                box = (j * piece_width, i * piece_height, (j + 1) * piece_width, (i + 1) * piece_height)
-                piece = image.crop(box)
-                pieces.append(piece)
+    # Rotate PNG if necessary
+    if (png_width < png_height and jpg_width > jpg_height) or (png_width > png_height and jpg_width < jpg_height):
+        png_image = png_image.rotate(90, expand=True)
+        png_width, png_height = png_image.size
+        png_aspect = png_width / png_height
 
-        # Shuffle pieces for the initial scrambled state
-        random.shuffle(pieces)
+    # Crop PNG to match JPG aspect ratio
+    if png_aspect > jpg_aspect:
+        # PNG is wider than JPG
+        new_width = int(png_height * jpg_aspect)
+        left = (png_width - new_width) / 2
+        right = left + new_width
+        top = 0
+        bottom = png_height
+    else:
+        # PNG is taller than JPG
+        new_height = int(png_width / jpg_aspect)
+        top = (png_height - new_height) / 2
+        bottom = top + new_height
+        left = 0
+        right = png_width
 
-        # Create frames for the GIF
-        frames = []
+    png_image = png_image.crop((left, top, right, bottom))
 
-        # Create a blank image for assembling the puzzle
-        blank_image = Image.new('RGB', (width, height), (255, 255, 255))
+    # Resize PNG to match JPG size
+    png_image = png_image.resize((jpg_width, jpg_height), Image.LANCZOS)
 
-        # Animate the pieces moving into place
-        for step in range(num_pieces * num_pieces):
-            frame = blank_image.copy()
-            for index, piece in enumerate(pieces):
-                if index <= step:
-                    x = (index % num_pieces) * piece_width
-                    y = (index // num_pieces) * piece_height
-                    frame.paste(piece, (x, y))
-            frames.append(frame)
+    # Overlay PNG on JPG
+    jpg_image.paste(png_image, (0, 0), png_image)
 
-        img_byte_arr = io.BytesIO()
-        frames[0].save(
-            img_byte_arr,
-            format='GIF',
-            save_all=True,
-            append_images=frames[1:],
-            loop=0,
-            duration=100  # Adjust duration per frame if needed
-        )
-        img_byte_arr.seek(0)
-        return img_byte_arr
-    
-        # Save frames as a GIF
-        imageio.mimsave(output_gif, frames, format='GIF', duration=duration)
-        print(f"GIF saved successfully as {output_gif}")
-
-    except Exception as e:
-        print(f"An error occurred: {e}")
+    # Save the result
+    jpg_image.save(output_path)
