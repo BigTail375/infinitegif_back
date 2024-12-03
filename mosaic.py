@@ -32,6 +32,3 @@ def apply_mosaic_effect(image_path, output_path, tile_size=10):
     # Save the mosaic image
     mosaic_image.save(output_path)
     print(f"Mosaic effect applied and saved as {output_path}")
-
-# Example usage
-apply_mosaic_effect('01-happy-asian-freelancer-developer-man-at-office_slidesbase-1.jpg', 'mosaic_effect.jpg', tile_size=5)

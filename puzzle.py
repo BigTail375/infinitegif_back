@@ -2,6 +2,7 @@ import numpy as np
 from PIL import Image
 import imageio
 import random
+import io
 
 def create_puzzle_effect(image_path, output_gif, num_pieces=4, duration=0.1):
     try:
@@ -42,12 +43,21 @@ def create_puzzle_effect(image_path, output_gif, num_pieces=4, duration=0.1):
                     frame.paste(piece, (x, y))
             frames.append(frame)
 
+        img_byte_arr = io.BytesIO()
+        frames[0].save(
+            img_byte_arr,
+            format='GIF',
+            save_all=True,
+            append_images=frames[1:],
+            loop=0,
+            duration=100  # Adjust duration per frame if needed
+        )
+        img_byte_arr.seek(0)
+        return img_byte_arr
+    
         # Save frames as a GIF
         imageio.mimsave(output_gif, frames, format='GIF', duration=duration)
         print(f"GIF saved successfully as {output_gif}")
 
     except Exception as e:
         print(f"An error occurred: {e}")
-
-# Example usage
-create_puzzle_effect('01-happy-asian-freelancer-developer-man-at-office_slidesbase-1.jpg', 'puzzle_effect.gif')

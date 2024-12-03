@@ -22,6 +22,7 @@ from zoom import image2recrusive
 from paintbynumber import paint_by_number
 from puzzle import create_puzzle_effect
 from mosaic import apply_mosaic_effect
+from function import convert_image_to_bytesio
 
 # MongoDB connection
 client = MongoClient("mongodb://localhost:27017")
@@ -307,6 +308,49 @@ def paintbynumber():
         print (e)
         return jsonify({'error', str(e)}), 500
 
+@app.route('/puzzle', methods=['POST'])
+def puzzle():
+    try:
+        if 'file' not in request.files:
+            return "No file part", 400
+        file = request.files['file']
+        if file.filename == '':
+            return "No selected file", 400
+        
+        piece_size = int(request.form['pieceSize'])
+        if piece_size > 5:
+            piece_size = 4
+        file_path = os.path.join(TEMP_DIR, f'{time.time()}.jpg')
+        saved_file_path = os.path.join(TEMP_DIR, f'{time.time()}.gif')
+        file.save(file_path)
+        img_byte_arr = create_puzzle_effect(file_path, saved_file_path, piece_size)
+
+        return send_file(img_byte_arr, mimetype='image/png')
+    except Exception as e:
+        print (e)
+        return jsonify({'error', str(e)}), 500
+
+@app.route('/mosaic', methods=['POST'])
+def mosaic():
+    try:
+        if 'file' not in request.files:
+            return "No file part", 400
+        file = request.files['file']
+        if file.filename == '':
+            return "No selected file", 400
+        
+        tile_size = int(request.form['tileSize'])
+        file_path = os.path.join(TEMP_DIR, f'{time.time()}.jpg')
+        saved_file_path = os.path.join(TEMP_DIR, f'{time.time()}.gif')
+        file.save(file_path)
+        apply_mosaic_effect(file_path, saved_file_path, tile_size)
+        img_byte_arr = convert_image_to_bytesio(saved_file_path)
+
+        return send_file(img_byte_arr, mimetype='image/png')
+    except Exception as e:
+        print (e)
+        return jsonify({'error', str(e)}), 500
+
 @app.route('/url2grid', methods=['POST'])
 def gif_grid_url():
     _id = request.form['_id']
@@ -396,7 +440,44 @@ def url2paint():
     except Exception as e:
         print (e)
         return jsonify({'error', str(e)}), 500
-    
+
+@app.route('/url2puzzle', methods=['POST'])
+def url2puzzle():
+    try:
+        _id = request.form['_id']
+        piece_size = int(request.form['pieceSize'])
+        if piece_size > 5:
+            piece_size = 4
+        object_id = ObjectId(str(_id))
+
+        image = collection_image.find_one({"_id": object_id})
+        file_path = os.path.join(IMG_DIR, image['folder_path'])
+        saved_file_path = os.path.join(TEMP_DIR, f'{time.time()}.gif')
+        img_byte_arr = create_puzzle_effect(file_path, saved_file_path, piece_size)
+
+        return send_file(img_byte_arr, mimetype='image/png')
+    except Exception as e:
+        print (e)
+        return jsonify({'error', str(e)}), 500
+
+@app.route('/url2mosaic', methods=['POST'])
+def url2mosaic():
+    try:
+        _id = request.form['_id']
+        tile_size = int(request.form['tileSize'])
+        object_id = ObjectId(str(_id))
+
+        image = collection_image.find_one({"_id": object_id})
+        file_path = os.path.join(IMG_DIR, image['folder_path'])
+        saved_file_path = os.path.join(TEMP_DIR, f'{time.time()}.gif')
+        apply_mosaic_effect(file_path, saved_file_path, tile_size)
+        img_byte_arr = convert_image_to_bytesio(saved_file_path)
+
+        return send_file(img_byte_arr, mimetype='image/png')
+    except Exception as e:
+        print (e)
+        return jsonify({'error', str(e)}), 500
+
 if __name__ == '__main__':
     # app.run()
     app.run(port=5001)
