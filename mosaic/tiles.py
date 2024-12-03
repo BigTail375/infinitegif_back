@@ -145,7 +145,7 @@ def place_tiles_into_gaps(polygons, filler_chains, half_tile, A0, plot=[]):
                     p = p.difference(p_vorhanden.buffer(0.1)) # => remove overlap
             # keep only largest fragment if more than one exists
             if p.geom_type=='MultiPolygon':
-                i_largest = np.argmax([p_i.area for p_i in p])
+                i_largest = np.argmax([p_i.area for p_i in p.geoms])
                 p = p[i_largest]
             if p.area >= 0.05*A0 and p.geom_type=='Polygon': # sort out very small tiles
                 polygons += [p]
