@@ -62,6 +62,8 @@ def edges_diblasi(img, gauss=5, details=1, plot=[]):
 
 def hed_edges(image):
     import cv2 as cv
+    if image.shape[2] == 4:
+        image = cv.cvtColor(image, cv.COLOR_RGBA2RGB)
     # based on https://github.com/opencv/opencv/blob/master/samples/dnn/edge_detection.py
     class CropLayer(object):
         def __init__(self, params, blobs):
