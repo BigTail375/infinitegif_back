@@ -122,10 +122,9 @@ def place_tiles_into_gaps(polygons, filler_chains, half_tile, A0, plot=[]):
     t0 = time.time()
     counter = 0
     for chain in filler_chains:
-        # Speed up:
-        chain_as_line = LineString(np.array(chain)[:,::-1]).buffer(2.1*half_tile) # ::-1 weil x und y vertauscht werden muss
+        chain_as_line = LineString(np.array(chain)[:,::-1]).buffer(2.1*half_tile)
         preselected_nearby_polygons = []
-
+        
         for poly in polygons:
             try:
                 if not poly.is_valid:
