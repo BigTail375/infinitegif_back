@@ -343,8 +343,22 @@ def mosaic():
         file_path = os.path.join(TEMP_DIR, f'{time.time()}.jpg')
         saved_file_path = os.path.join(TEMP_DIR, f'{time.time()}.jpg')
         file.save(file_path)
-        create_roman_mosaic(file_path, saved_file_path)
-        img_byte_arr = convert_image_to_bytesio(saved_file_path)
+        rotated_file_path = os.path.join(TEMP_DIR, f'{time.time()}.jpg')
+        rotate_flag = False
+        with Image.open(file_path) as img:
+            if img.width < img.height:
+                img = img.rotate(-90, expand=True)
+                img.save(rotated_file_path)
+                rotate_flag = True
+        if rotate_flag:
+            create_roman_mosaic(rotated_file_path, saved_file_path)
+            with Image.open(saved_file_path) as img:
+                img = img.rotate(90, expand=True)
+                img.save(rotated_file_path)
+            img_byte_arr = convert_image_to_bytesio(rotated_file_path)
+        else:
+            create_roman_mosaic(file_path, saved_file_path)
+            img_byte_arr = convert_image_to_bytesio(saved_file_path)
 
         return send_file(img_byte_arr, mimetype='image/png')
     except Exception as e:
@@ -401,7 +415,6 @@ def url2recrusive():
 
         image = collection_image.find_one({"_id": object_id})
         file_path = os.path.join(IMG_DIR, image['folder_path'])
-
         img = Image.open(file_path)
         result_img = image2recrusive(img)
 
@@ -470,10 +483,8 @@ def url2mosaic():
 
         image = collection_image.find_one({"_id": object_id})
         file_path = os.path.join(IMG_DIR, image['folder_path'])
-        resize_file_path = os.path.join(TEMP_DIR, f'{time.time()}.jpg')
         saved_file_path = os.path.join(TEMP_DIR, f'{time.time()}.jpg')
-        resize_and_save_image(file_path, resize_file_path)
-        create_roman_mosaic(resize_file_path, saved_file_path)
+        create_roman_mosaic(file_path, saved_file_path)
         img_byte_arr = convert_image_to_bytesio(saved_file_path)
 
         return send_file(img_byte_arr, mimetype='image/png')
