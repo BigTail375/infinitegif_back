@@ -484,8 +484,22 @@ def url2mosaic():
         image = collection_image.find_one({"_id": object_id})
         file_path = os.path.join(IMG_DIR, image['folder_path'])
         saved_file_path = os.path.join(TEMP_DIR, f'{time.time()}.jpg')
-        create_roman_mosaic(file_path, saved_file_path)
-        img_byte_arr = convert_image_to_bytesio(saved_file_path)
+        rotated_file_path = os.path.join(TEMP_DIR, f'{time.time()}.jpg')
+        rotate_flag = False
+        with Image.open(file_path) as img:
+            if img.width < img.height:
+                img = img.rotate(-90, expand=True)
+                img.save(rotated_file_path)
+                rotate_flag = True
+        if rotate_flag:
+            create_roman_mosaic(rotated_file_path, saved_file_path)
+            with Image.open(saved_file_path) as img:
+                img = img.rotate(90, expand=True)
+                img.save(rotated_file_path)
+            img_byte_arr = convert_image_to_bytesio(rotated_file_path)
+        else:
+            create_roman_mosaic(file_path, saved_file_path)
+            img_byte_arr = convert_image_to_bytesio(saved_file_path)
 
         return send_file(img_byte_arr, mimetype='image/png')
     except Exception as e:
