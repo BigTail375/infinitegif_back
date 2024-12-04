@@ -470,9 +470,10 @@ def url2mosaic():
 
         image = collection_image.find_one({"_id": object_id})
         file_path = os.path.join(IMG_DIR, image['folder_path'])
+        resize_file_path = os.path.join(TEMP_DIR, f'{time.time()}.gif')
         saved_file_path = os.path.join(TEMP_DIR, f'{time.time()}.gif')
-        resize_and_save_image(file_path)
-        create_roman_mosaic(file_path, saved_file_path)
+        resize_and_save_image(file_path, resize_file_path)
+        create_roman_mosaic(resize_file_path, saved_file_path)
         img_byte_arr = convert_image_to_bytesio(saved_file_path)
 
         return send_file(img_byte_arr, mimetype='image/png')
