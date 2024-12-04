@@ -134,8 +134,8 @@ def place_tiles_into_gaps(polygons, filler_chains, half_tile, A0, plot=[]):
                         print(f"Polygon could not be fixed: {poly}")
                         continue  # Skip this polygon if it cannot be fixed
                 
-                if poly.intersects(chain_as_line):
-                    preselected_nearby_polygons.append(poly)
+                # if poly.intersects(chain_as_line):
+                #     preselected_nearby_polygons.append(poly)
             except Exception as e:
                 print(f"Error processing polygon: {poly}, Error: {e}")
                 continue
