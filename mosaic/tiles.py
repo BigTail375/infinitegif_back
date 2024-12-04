@@ -118,27 +118,14 @@ def place_tiles_along_chains(chains, angles_0to180, half_tile, RAND_SIZE, MAX_AN
 
 
 def place_tiles_into_gaps(polygons, filler_chains, half_tile, A0, plot=[]):
+
     # fill spaces which are still empty after the main construction step
     t0 = time.time()
     counter = 0
     for chain in filler_chains:
-        chain_as_line = LineString(np.array(chain)[:,::-1]).buffer(2.1*half_tile)
-        preselected_nearby_polygons = []
-        
-        for poly in polygons:
-            try:
-                if not poly.is_valid:
-                    print(f"Invalid polygon found: {poly}")
-                    poly = poly.buffer(0)  # Attempt to fix invalid polygon
-                    if not poly.is_valid:
-                        print(f"Polygon could not be fixed: {poly}")
-                        continue  # Skip this polygon if it cannot be fixed
-                
-                # if poly.intersects(chain_as_line):
-                #     preselected_nearby_polygons.append(poly)
-            except Exception as e:
-                print(f"Error processing polygon: {poly}, Error: {e}")
-                continue
+        # Speed up:
+        chain_as_line = LineString(np.array(chain)[:,::-1]).buffer(2.1*half_tile) # ::-1 weil x und y vertauscht werden muss
+        preselected_nearby_polygons = [poly for poly in polygons if poly.intersects(chain_as_line)]
         # Sicherstellen, dass am Ende der Kette nichts verschenkt wird
         index_list = list(range(0, len(chain), half_tile*2))
         last_i = len(chain)-1
