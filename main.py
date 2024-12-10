@@ -1,6 +1,7 @@
 import os
 import time
 import shutil
+import cv2
 
 from flask import Flask, request, jsonify, send_file
 from werkzeug.utils import secure_filename
@@ -12,14 +13,22 @@ from typing import List
 from PIL import Image, ImageSequence
 from dotenv import load_dotenv
 import io
+from datetime import datetime
+import json
+from bson import ObjectId
 
-from zoom import image2recrusive
 from path import IMG_DIR, TEMP_DIR
+from utils.zoom import image2recrusive
+from utils.paintbynumber import paint_by_number
+from utils.puzzle import overlay_images
+from utils.function import convert_image_to_bytesio
+from mosaic.mosaic import create_roman_mosaic
 
 # MongoDB connection
 client = MongoClient("mongodb://localhost:27017")
 db = client["image_database"]
-collection = db["images"]
+collection_image = db["images"]
+collection_audio = db["audio"]
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
@@ -29,76 +38,153 @@ class ImageResponse(BaseModel):
     url: str
     tags: List[str]
 
-@app.route('/page', methods=['POST'])
-def get_page():
-    try:
-        img_per_page = 10
-
-        # Get JSON data from the request
-        data = request.get_json()
- 
-        # Extract 'number' from the request data
-        page_index = data.get('page')
-
-        # Check if 'number' is an integer
-        if page_index is None:
-            return jsonify({'error': 'No number provided'}), 400
-        if not isinstance(page_index, int):
-            return jsonify({'error': 'The number must be an integer'}), 400
-        
-        img_count = len(os.listdir(IMG_DIR)) - 1
-        data = []
-        end_index = img_count - img_per_page * (page_index - 1)
-        start_index = end_index - img_per_page
-        if start_index < 0:
-            start_index = 0
-        for i in range(img_count - 1, start_index - 1, -1):
-            if os.path.exists(os.path.join(IMG_DIR, f'{i}.gif')):
-                data.append({'path': f'{i}.gif'})
-            else:
-                data.append({'path': f'{i}.png'})
-        
-        # Return the number as part of the response
-        return jsonify({'results': data}), 200
-
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
 @app.route('/upload', methods=['POST'])
-def upload_file():
-    # Check if the POST request has the file part
+def upload_image():
     if 'file' not in request.files:
         return {'error': 'No file part'}, 400
     
     file = request.files['file']
+    tags = request.form.get('tags', '[]')
 
     if file.filename == '':
         return {'error': 'No selected file'}, 400
+    try:
+        tags = json.loads(tags)  # Parse the tags
+    except json.JSONDecodeError:
+        return {'error': 'Invalid tags format'}, 400
+    
+    print (tags, type(tags))
+    if len(tags) > 0 and tags[0] == "":
+        tags = []
+    file_ext = file.filename.split('.')[-1]
+    if file_ext == 'extension':
+        file_ext = 'gif'
+    filename = f"{uuid.uuid4()}.{file_ext}"
+    file_path = os.path.join(IMG_DIR, secure_filename(filename))
+    file.save(file_path)
 
-    if file:
-        img_count = len(os.listdir(IMG_DIR)) - 1
-        file_path = os.path.join(IMG_DIR, f'{img_count}.gif')
-        file.save(file_path)
+    document = {
+        "folder_path": filename,
+        "tags": tags,
+        "audio_path": "",
+        "vote_count": 0,
+        "upload_time": datetime.now().timestamp() # Unique value for sorting by upload time
+    }
+    collection_image.insert_one(document)
 
-        gif = Image.open(file_path)
-        watermark = Image.open('watermark.png')
+    return jsonify({"message": "Image uploaded successfully", "file_path": file_path})
+
+@app.route('/page', methods=['POST'])
+def get_page():
+    try:
+        img_per_page = 10
+        data = request.get_json()
+        page_index = data.get('page')
+
+        document_count = collection_image.count_documents({})
+        img_count = img_per_page * (page_index + 1)
+        if img_count > document_count:
+            img_count = document_count
+        cursor = collection_image.find().sort('upload_time', DESCENDING).limit(img_count)
+        images = list(cursor)
+
+        if not images:
+            return jsonify({"error": "No images found"}), 404
+        response = [{"path": image["folder_path"], "_id": str(image["_id"]), "audio": image["audio_path"]} for image in images]
+        return jsonify({'results': response}), 200
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/audio', methods=['POST'])
+def get_audio():
+    try:
+        audio_per_page = 10
+        data = request.get_json()
+        page_index = data.get('page')
+
+        document_count = collection_audio.count_documents({})
+        audio_count = audio_per_page * (page_index + 1)
+        if audio_count > document_count:
+            audio_count = document_count
+        cursor = collection_audio.find().sort('upload_time', DESCENDING).limit(audio_count)
+        audios = list(cursor)
+
+        if not audios:
+            return jsonify({"error": "No images found"}), 404
+        response = [{"_id": str(audio["_id"]), "audio": audio["folder_path"]} for audio in audios]
+        return jsonify({'results': response}), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route("/image_by_tags", methods=["POST"])
+def get_images_by_tags():
+    # try:
+    image_per_page = 10
+
+    data = request.json
+    page = data.get("page")
+    tags = data.get("tags", [])
+    
+    filter_query = {"tags": {"$in": tags}}
+
+    img_count = image_per_page * (int(page) + 1)
+    tag_collection_count = collection_image.count_documents(filter_query)
+    print (tag_collection_count)
+    if img_count > tag_collection_count:
+        img_count = tag_collection_count
+
+    cursor = collection_image.find(filter_query).sort('upload_time', DESCENDING).limit(img_count)
+    images = list(cursor)
+
+    if not images:
+        return jsonify({"error": "No images found"}), 404
+    response = [{"path": image["folder_path"], "_id": str(image["_id"]), "audio": image["audio_path"]} for image in images]
+    return jsonify({'results': response}), 200
+    # except Exception as e:
+    #     return jsonify({'error': str(e)}), 500
+
+@app.route('/id', methods=['POST'])
+def get_id():
+    try:
+        data = request.get_json()
+        _id = data.get('id')
+        object_id = ObjectId(str(_id))
+        image = collection_image.find_one({"_id": object_id})
+
+        if not image:
+            return jsonify({"error": "No images found"}), 404
+        response = {'path': image['folder_path'], 'tags': image['tags'], "audio": image["audio_path"], "vote": image["vote_count"]}
         
-        new_width = int(gif.size[0] * 0.2)
-        new_height = int(new_width / watermark.size[0] * watermark.size[1])
-        watermark_resized = watermark.resize((new_width, new_height), Image.LANCZOS)
+        return jsonify({'results': response}), 200
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
-        position = (int(gif.size[0] * 0.7), int(gif.size[1] * 0.1))
+@app.route('/update_vote', methods=['POST'])
+def update_vote():
+    try:
+        data = request.get_json()
+        _id = data.get('id')
+        vote = data.get('vote')
+        object_id = ObjectId(str(_id))
+        image = collection_image.find_one({"_id": object_id})
 
-        frames = []
-
-        for frame in ImageSequence.Iterator(gif):
-            frame = frame.convert('RGBA')
-            frame_with_watermark = frame.copy()
-            frame_with_watermark.paste(watermark_resized, position, watermark_resized)
-            frames.append(frame_with_watermark)
-        frames[0].save(file_path, save_all=True, append_images=frames[1:], loop=0, duration=gif.info['duration'])
-
-        return {'message': 'File saved successfully'}, 200
+        if vote == "up":
+            collection_image.update_one(
+                {"_id": object_id},
+                {"$inc": {"vote_count": 1}}
+            )
+        else:
+            collection_image.update_one(
+                {"_id": object_id},
+                {"$inc": {"vote_count": -1}}
+            )
+        return jsonify({'results': "vote is updated!"}), 200
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/gif2grid', methods=['POST'])
 def gif_grid():
@@ -142,7 +228,7 @@ def gif_grid():
             grid_image.paste(frame, (col * gif_width, row * gif_height))
 
         # Save the grid image
-        grid_img_name = f'{time.time()}.png'
+        grid_img_name = f"{uuid.uuid4()}.png"
         grid_img_path = os.path.join(TEMP_DIR, grid_img_name)
         grid_image.save(grid_img_path)
         return jsonify({'results': grid_img_name}), 200
@@ -154,9 +240,17 @@ def uploadGrid():
     try:
         file_path = request.form['file']
         
-        img_count = len(os.listdir(IMG_DIR)) - 1
-        shutil.copy(os.path.join(TEMP_DIR, file_path), os.path.join(IMG_DIR, f'{img_count}.png'))
-        
+        shutil.move(os.path.join(TEMP_DIR, file_path), os.path.join(IMG_DIR, file_path))
+        tags = []
+        document = {
+            "folder_path": file_path,
+            "tags": tags,
+            "audio_path": "",
+            "vote_count": 0,
+            "upload_time": datetime.now().timestamp() # Unique value for sorting by upload time
+        }
+        collection_image.insert_one(document)
+
         return jsonify({'success': 'image is uploaded!'}), 200
 
     except Exception as e:
@@ -193,6 +287,225 @@ def recrusiveGif():
         print (e)
         return jsonify({'error', str(e)}), 500
 
+@app.route('/paintbynumber', methods=['POST'])
+def paintbynumber():
+    try:
+        if 'file' not in request.files:
+            return "No file part", 400
+        file = request.files['file']
+        if file.filename == '':
+            return "No selected file", 400
+
+        file_path = os.path.join(TEMP_DIR, f'{time.time()}.jpg')
+        file.save(file_path)
+        painted_img = paint_by_number(file_path)
+        _, buffer = cv2.imencode('.jpg', painted_img)
+        img_byte_arr = io.BytesIO(buffer.tobytes())
+        img_byte_arr.seek(0)
+
+        return send_file(img_byte_arr, mimetype='image/png')
+    except Exception as e:
+        print (e)
+        return jsonify({'error', str(e)}), 500
+
+@app.route('/puzzle', methods=['POST'])
+def puzzle():
+    try:
+        if 'file' not in request.files:
+            return "No file part", 400
+        file = request.files['file']
+        if file.filename == '':
+            return "No selected file", 400
+        
+        piece_size = int(request.form['pieceSize'])
+        if piece_size > 5:
+            piece_size = 4
+        file_path = os.path.join(TEMP_DIR, f'{time.time()}.jpg')
+        saved_file_path = os.path.join(TEMP_DIR, f'{time.time()}.jpg')
+        file.save(file_path)
+        overlay_images(file_path, 'assets/overlay.png', saved_file_path)
+        img_byte_arr = convert_image_to_bytesio(saved_file_path)
+        return send_file(img_byte_arr, mimetype='image/png')
+    except Exception as e:
+        print (e)
+        return jsonify({'error', str(e)}), 500
+
+@app.route('/mosaic', methods=['POST'])
+def mosaic():
+    try:
+        if 'file' not in request.files:
+            return "No file part", 400
+        file = request.files['file']
+        if file.filename == '':
+            return "No selected file", 400
+        
+        tile_size = int(request.form['tileSize'])
+        file_path = os.path.join(TEMP_DIR, f'{time.time()}.jpg')
+        saved_file_path = os.path.join(TEMP_DIR, f'{time.time()}.jpg')
+        file.save(file_path)
+        rotated_file_path = os.path.join(TEMP_DIR, f'{time.time()}.jpg')
+        rotate_flag = False
+        with Image.open(file_path) as img:
+            if img.width < img.height:
+                img = img.rotate(-90, expand=True)
+                img.save(rotated_file_path)
+                rotate_flag = True
+        if rotate_flag:
+            create_roman_mosaic(rotated_file_path, saved_file_path)
+            with Image.open(saved_file_path) as img:
+                img = img.rotate(90, expand=True)
+                img.save(rotated_file_path)
+            img_byte_arr = convert_image_to_bytesio(rotated_file_path)
+        else:
+            create_roman_mosaic(file_path, saved_file_path)
+            img_byte_arr = convert_image_to_bytesio(saved_file_path)
+
+        return send_file(img_byte_arr, mimetype='image/png')
+    except Exception as e:
+        print (e)
+        return jsonify({'error', str(e)}), 500
+
+@app.route('/url2grid', methods=['POST'])
+def gif_grid_url():
+    _id = request.form['_id']
+    grid_size = request.form['gridSize']
+    
+    try:
+        rows, cols = map(int, grid_size.split('x'))  # Extract rows and columns from grid size
+    except ValueError:
+        return {'error': 'Invalid grid size format'}, 400
+    
+    
+    object_id = ObjectId(str(_id))
+    image = collection_image.find_one({"_id": object_id})
+
+    file_path = os.path.join(IMG_DIR, image['folder_path'])
+
+    gif = Image.open(file_path)
+
+    # Calculate frame step to sample evenly from the GIF
+    frame_count = gif.n_frames
+    total_images = rows * cols
+
+    # Create a new blank image for the grid
+    gif_width, gif_height = gif.size
+    grid_image = Image.new('RGBA', (cols * gif_width, rows * gif_height))
+    
+    frames = []
+    for i in range(total_images):
+        gif.seek(int(frame_count * i / total_images))
+        frames.append(gif.copy())
+
+    for i, frame in enumerate(frames):
+        row = i // cols
+        col = i % cols
+        grid_image.paste(frame, (col * gif_width, row * gif_height))
+
+    # Save the grid image
+    grid_img_name = f"{uuid.uuid4()}.png"
+    grid_img_path = os.path.join(TEMP_DIR, grid_img_name)
+    grid_image.save(grid_img_path)
+    return jsonify({'results': grid_img_name}), 200
+ 
+@app.route('/url2recrusive', methods=['POST'])
+def url2recrusive():
+    try:
+        _id = request.form['_id']
+        object_id = ObjectId(str(_id))
+
+        image = collection_image.find_one({"_id": object_id})
+        file_path = os.path.join(IMG_DIR, image['folder_path'])
+        img = Image.open(file_path)
+        result_img = image2recrusive(img)
+
+        # Save processed image to a byte stream
+        img_byte_arr = io.BytesIO()
+        result_img[0].save(
+            img_byte_arr,
+            format='GIF',
+            save_all=True,
+            append_images=result_img[1:],
+            loop=0,
+            duration=100  # Adjust duration per frame if needed
+        )
+        img_byte_arr.seek(0)
+
+        return send_file(img_byte_arr, mimetype='image/png')
+    except Exception as e:
+        print (e)
+        return jsonify({'error', str(e)}), 500
+
+@app.route('/url2paint', methods=['POST'])
+def url2paint():
+    try:
+        _id = request.form['_id']
+        object_id = ObjectId(str(_id))
+
+        image = collection_image.find_one({"_id": object_id})
+        file_path = os.path.join(IMG_DIR, image['folder_path'])
+
+        painted_img = paint_by_number(file_path)
+        _, buffer = cv2.imencode('.jpg', painted_img)
+        img_byte_arr = io.BytesIO(buffer.tobytes())
+        img_byte_arr.seek(0)
+
+        return send_file(img_byte_arr, mimetype='image/png')
+    except Exception as e:
+        print (e)
+        return jsonify({'error', str(e)}), 500
+
+@app.route('/url2puzzle', methods=['POST'])
+def url2puzzle():
+    try:
+        _id = request.form['_id']
+        piece_size = int(request.form['pieceSize'])
+        if piece_size > 5:
+            piece_size = 4
+        object_id = ObjectId(str(_id))
+
+        image = collection_image.find_one({"_id": object_id})
+        file_path = os.path.join(IMG_DIR, image['folder_path'])
+        saved_file_path = os.path.join(TEMP_DIR, f'{time.time()}.png')
+        overlay_images(file_path, 'assets/overlay.png', saved_file_path)
+        img_byte_arr = convert_image_to_bytesio(saved_file_path)
+
+        return send_file(img_byte_arr, mimetype='image/png')
+    except Exception as e:
+        print (e)
+        return jsonify({'error', str(e)}), 500
+
+@app.route('/url2mosaic', methods=['POST'])
+def url2mosaic():
+    try:
+        _id = request.form['_id']
+        tile_size = int(request.form['tileSize'])
+        object_id = ObjectId(str(_id))
+
+        image = collection_image.find_one({"_id": object_id})
+        file_path = os.path.join(IMG_DIR, image['folder_path'])
+        saved_file_path = os.path.join(TEMP_DIR, f'{time.time()}.jpg')
+        rotated_file_path = os.path.join(TEMP_DIR, f'{time.time()}.jpg')
+        rotate_flag = False
+        with Image.open(file_path) as img:
+            if img.width < img.height:
+                img = img.rotate(-90, expand=True)
+                img.save(rotated_file_path)
+                rotate_flag = True
+        if rotate_flag:
+            create_roman_mosaic(rotated_file_path, saved_file_path)
+            with Image.open(saved_file_path) as img:
+                img = img.rotate(90, expand=True)
+                img.save(rotated_file_path)
+            img_byte_arr = convert_image_to_bytesio(rotated_file_path)
+        else:
+            create_roman_mosaic(file_path, saved_file_path)
+            img_byte_arr = convert_image_to_bytesio(saved_file_path)
+
+        return send_file(img_byte_arr, mimetype='image/png')
+    except Exception as e:
+        print (e)
+        return jsonify({'error', str(e)}), 500
 
 if __name__ == '__main__':
-    app.run()
+    # app.run()
+    app.run(port=5001)
