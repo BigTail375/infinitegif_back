@@ -147,5 +147,6 @@ def apply_effect(input_file_path, output_file_path, effect_type, param1 = None, 
     elif effect_type == 17:  solarize(input_file_path, output_file_path, param1, param2, param3)
     elif effect_type == 18:  vignette(input_file_path, output_file_path, param1, param2, param3)
     elif effect_type == 19:  pixelate(input_file_path, output_file_path, param1, param2, param3)
+
 if __name__ == '__main__':
    image = cv2.imread(R'C:\Users\Administrator\Documents\2.jpg')

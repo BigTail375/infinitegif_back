@@ -23,7 +23,7 @@ from utils.paintbynumber import paint_by_number
 from utils.puzzle import overlay_images
 from utils.function import convert_image_to_bytesio
 from mosaic.mosaic import create_roman_mosaic
-
+from utils.effect import apply_effect
 # MongoDB connection
 client = MongoClient("mongodb://localhost:27017")
 db = client["image_database"]
@@ -330,6 +330,33 @@ def puzzle():
         print (e)
         return jsonify({'error', str(e)}), 500
 
+@app.route('/effect', methods=['POST'])
+def effect():
+    try:
+        if 'file' not in request.files:
+            return "No file part", 400
+        file = request.files['file']
+        if file.filename == '':
+            return "No selected file", 400
+        
+        effect_type = int(request.form['effectType'])
+        param1, param2, param3 = None, None, None
+        if effect_type in [0, 9, 10, 11, 12, 13, 14, 15, 16, 17, 19]:
+            param1 = float(request.form['param1'])
+        if effect_type in [0, 14]:
+            param2 = float(request.form['param2'])
+        if effect_type == 14:
+            param3 = float(request.form['param3'])
+        file_path = os.path.join(TEMP_DIR, f'{time.time()}.jpg')
+        saved_file_path = os.path.join(TEMP_DIR, f'{time.time()}.jpg')
+        file.save(file_path)
+        apply_effect(file_path, saved_file_path, effect_type, param1, param2, param3)
+        img_byte_arr = convert_image_to_bytesio(saved_file_path)
+        return send_file(img_byte_arr, mimetype='image/png')
+    except Exception as e:
+        print (e)
+        return jsonify({'error', str(e)}), 500
+
 @app.route('/mosaic', methods=['POST'])
 def mosaic():
     try:
@@ -501,6 +528,31 @@ def url2mosaic():
             create_roman_mosaic(file_path, saved_file_path)
             img_byte_arr = convert_image_to_bytesio(saved_file_path)
 
+        return send_file(img_byte_arr, mimetype='image/png')
+    except Exception as e:
+        print (e)
+        return jsonify({'error', str(e)}), 500
+
+@app.route('/url2effect', methods=['POST'])
+def url2effect():
+    try:
+        _id = request.form['_id']
+        object_id = ObjectId(str(_id))
+
+        image = collection_image.find_one({"_id": object_id})
+        file_path = os.path.join(IMG_DIR, image['folder_path'])
+        saved_file_path = os.path.join(TEMP_DIR, f'{time.time()}.png')
+        
+        effect_type = int(request.form['effectType'])
+        param1, param2, param3 = None, None, None
+        if effect_type in [0, 9, 10, 11, 12, 13, 14, 15, 16, 17, 19]:
+            param1 = float(request.form['param1'])
+        if effect_type in [0, 14]:
+            param2 = float(request.form['param2'])
+        if effect_type == 14:
+            param3 = float(request.form['param3'])
+        apply_effect(file_path, saved_file_path, effect_type, param1, param2, param3)
+        img_byte_arr = convert_image_to_bytesio(saved_file_path)
         return send_file(img_byte_arr, mimetype='image/png')
     except Exception as e:
         print (e)
