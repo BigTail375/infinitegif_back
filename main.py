@@ -80,12 +80,13 @@ def get_page():
         img_per_page = 10
         data = request.get_json()
         page_index = data.get('page')
+        skip_index = data.get('skip')
 
-        document_count = collection_image.count_documents({})
+        document_count = collection_image.count_documents({}) - skip_index
         img_count = img_per_page * (page_index + 1)
         if img_count > document_count:
             img_count = document_count
-        cursor = collection_image.find().sort('upload_time', DESCENDING).limit(img_count)
+        cursor = collection_image.find().sort('upload_time', DESCENDING).skip(skip_index).limit(img_count)
         images = list(cursor)
 
         if not images:
@@ -102,12 +103,13 @@ def get_audio():
         audio_per_page = 10
         data = request.get_json()
         page_index = data.get('page')
+        skip_index = data.get('skip')
 
-        document_count = collection_audio.count_documents({})
+        document_count = collection_audio.count_documents({}) - skip_index
         audio_count = audio_per_page * (page_index + 1)
         if audio_count > document_count:
             audio_count = document_count
-        cursor = collection_audio.find().sort('upload_time', DESCENDING).limit(audio_count)
+        cursor = collection_audio.find().sort('upload_time', DESCENDING).skip(skip_index).limit(audio_count)
         audios = list(cursor)
 
         if not audios:
@@ -126,16 +128,17 @@ def get_images_by_tags():
     data = request.json
     page = data.get("page")
     tags = data.get("tags", [])
+    skip_index = data.get("skip")
     
     filter_query = {"tags": {"$in": tags}}
 
     img_count = image_per_page * (int(page) + 1)
-    tag_collection_count = collection_image.count_documents(filter_query)
+    tag_collection_count = collection_image.count_documents(filter_query) - skip_index
     print (tag_collection_count)
     if img_count > tag_collection_count:
         img_count = tag_collection_count
 
-    cursor = collection_image.find(filter_query).sort('upload_time', DESCENDING).limit(img_count)
+    cursor = collection_image.find(filter_query).sort('upload_time', DESCENDING).skip(skip_index).limit(img_count)
     images = list(cursor)
 
     if not images:
