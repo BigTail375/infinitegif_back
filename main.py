@@ -16,8 +16,9 @@ import io
 from datetime import datetime
 import json
 from bson import ObjectId
+import requests
 
-from path import IMG_DIR, TEMP_DIR
+from path import IMG_DIR, TEMP_DIR, ML_SERVER
 from utils.zoom import image2recrusive
 from utils.paintbynumber import paint_by_number
 from utils.puzzle import overlay_images
@@ -560,6 +561,53 @@ def url2effect():
     except Exception as e:
         print (e)
         return jsonify({'error', str(e)}), 500
+
+@app.route('/faceswap', methods=['POST'])
+def faceswap():
+    if 'file' not in request.files:
+        return {'error': 'No file part'}, 400
+
+    _id = request.form['_id']
+    source_file = request.files['file']
+    if source_file.filename == '':
+            return {'error': 'No selected file'}, 400
+    source_file_ext = source_file.filename.split('.')[-1]
+    source_filename = f"{uuid.uuid4()}.{source_file_ext}"
+    source_file_path = os.path.join(TEMP_DIR, secure_filename(source_filename))
+    source_file.save(source_file_path)
+
+    object_id = ObjectId(str(_id))
+    target_image = collection_image.find_one({"_id": object_id})
+    target_file_path = os.path.join(IMG_DIR, target_image['folder_path'])
+    
+    # Save the face swap image
+    faceswap_img_name = f"{uuid.uuid4()}.png"
+    faceswap_img_path = os.path.join(TEMP_DIR, faceswap_img_name)
+
+    with open(target_file_path, 'rb') as target_file, open(source_file_path, 'rb') as source_file:
+        # Prepare the files and form data
+        files = {
+            'target': target_file,
+            'source': source_file
+        }
+        data = {
+            'face_enhancer': 'False'  # or 'false' depending on your requirement
+        }
+        
+        # Send the POST request
+        response = requests.post(ML_SERVER, files=files, data=data)
+
+        # Check if the request was successful
+        if response.status_code == 200:
+            # Save the received image file
+            with open(faceswap_img_path, 'wb') as output_file:  # Change the extension if needed
+                output_file.write(response.content)
+            print("File saved successfully.")
+        else:
+            print(f"Request failed with status code: {response.status_code}")
+            return {'error': 'Face Swap Failed!'}, 400
+
+    return jsonify({'results': faceswap_img_name}), 200
 
 if __name__ == '__main__':
     # app.run()
